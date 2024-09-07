@@ -1,0 +1,4 @@
+Flask
+networkx
+mac-vendor-lookup
+pysnmp

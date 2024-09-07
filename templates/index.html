@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>кукумяфка</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.18.2/cytoscape.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+</head>
+<body>
+
+    <div id="tabs">
+        {% for file in files %}
+            <div class="lr" style="margin-bottom: 10px;">
+                <button onclick="updateData('{{ file.router_ip }} ({{ file.dates[0] }})')">
+                    {{ file.router_ip }} ({{ file.dates[0] }}) обновить
+                </button>
+                <div class="sel_pl_del">
+                    <select id="dates-{{ loop.index }}" name="dates" onclick="selectDate(this, {{ loop.index }})">
+                        {% for date in file.dates %}
+                            <option value="{{ file.router_ip }} ({{ date }})">
+                                {{ file.router_ip }} ({{ date }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button id="del-button-{{ loop.index }}" onclick="del_by_time('{{ file.dates[0] }}')" title="({{ file.dates[0] }})">
+                        <img src="{{ url_for('static', filename='ico.png') }}" alt="">
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div id="links_tooltip">
+        <span id="closeBtn2">&times;</span>
+        <div id="infoContent2"></div>
+    </div>
+    <div id="infoPanel">
+        <span id="closeBtn">&times;</span>
+        <div id="infoContent"></div>
+    </div>
+    <div id="result"></div>
+    <div id="cy"></div>
+
+    <div class="arrow">
+        <img src="{{ url_for('static', filename='arrow.png') }}" alt="">
+    </div>
+
+    <div class="down">
+        <div class="daun">
+            <div class="add">
+                <h3>Добавить</h3>
+                <input id="ip" type="text" placeholder="Введите IP">
+                <button class="add_btn" onclick="add()">Добавить</button>
+            </div>
+    
+            <div class="del">
+                <div class="del_by_old">
+                    <h3>Удалить старше чем</h3>
+                    <div class="del_by_old_inputs">
+                        <input id="del_by_old_date" type="date" placeholder="Дата">
+                        <input id="del_by_old_time" type="time" placeholder="Время">
+                    </div>
+                    <p style="color: red; font-weight: bold;">*Время не обязательно</p>
+                    <button class="add_btn" onclick="del_by_old()">Удалить</button>
+                </div>
+            </div>
+
+            <div class="sop">
+                <h3>Сопоставить</h3>
+                <div class="sops">
+                    <div class="sop1">
+                        <h3>Новая</h3>
+                        <div class="sop_inputs1">
+                            <input id="sop1_i1" type="date" placeholder="Дата">
+                            <input id="sop1_i2" type="time" placeholder="Время">
+                        </div>
+                        <button onclick="loadtime('sop1')" class="sop1_btn">Выбрать текущее</button>
+                    </div>
+                    <div class="sop2">
+                        <h3>Старая</h3>
+                        <div class="sop_inputs2">
+                            <input id="sop2_i1" type="date" placeholder="Дата">
+                            <input id="sop2_i2" type="time" placeholder="Время">
+                        </div>
+                        <button onclick="loadtime('sop2')" class="sop2_btn">Выбрать текущее</button>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: row;">
+                    <button onclick="sop()" class="start_sop"><img style="max-width: 30px;" src="{{ url_for('static', filename='go.png') }}" alt=""></button>
+                    <button onclick="hidesop()"><img style="max-width: 30px;" src="{{ url_for('static', filename='x.png') }}" alt=""></button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+
+    <div class="alert-container"></div>
+
+    <script>
+let selectedFile = '';
+let isUpdating = false;
+
+document.querySelector('.arrow').addEventListener('click', function() {
+    this.classList.toggle('flipped');
+    document.querySelector('.down').classList.toggle('show');
+});
+
+function loadtime(sop){
+    if (selected_time) {
+        var datePart = selected_time.split(' ')[0]; // "2024-07-24"
+        var timePart = selected_time.split(' ')[1]; // "18:52:23"
+        if (sop == 'sop1') {
+            var dateInput = document.getElementById('sop1_i1');
+            var timeInput = document.getElementById('sop1_i2');
+        } else {
+            var dateInput = document.getElementById('sop2_i1');
+            var timeInput = document.getElementById('sop2_i2');
+        }
+        dateInput.value = datePart;
+        timeInput.value = timePart;
+    } else {
+        showNotification('uusuccess', 'Ничего не выбрано');
+    }
+}
+function hidesop(){
+    var resultDiv = $('#result');
+    resultDiv.removeClass('show');
+}
+
+function sop() {
+    var sop1_date = $('#sop1_i1').val();
+    var sop1_time = $('#sop1_i2').val();
+    var sop2_date = $('#sop2_i1').val();
+    var sop2_time = $('#sop2_i2').val();
+
+    if (!sop1_date || !sop1_time || !sop2_date || !sop2_time) {
+        showNotification('uusuccess', 'Заполните все поля');
+        return;
+    }
+
+    var sop1 = sop1_date + " " + sop1_time;
+    var sop2 = sop2_date + " " + sop2_time;
+
+    var data = {
+        sop1: sop2,
+        sop2: sop1
+    };
+
+        $.ajax({
+        url: '/sop',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            displayDifferences(response);
+        },
+        error: function(xhr, status, error) {
+            console.error('Error:', error);
+        }
+    });
+}
+function displayDifferences(data) {
+            var resultDiv = $('#result');
+            resultDiv.empty();
+            resultDiv.addClass('show'); 
+            var devicesAdded = data.devices.added;
+            var devicesRemoved = data.devices.removed;
+            var linksAdded = data.links.added;
+            var linksRemoved = data.links.removed;
+
+            if (devicesAdded.length > 0) {
+                resultDiv.append('<h3>Добавленные устройства:</h3>');
+                devicesAdded.forEach(function(device) {
+                    resultDiv.append('<p>IP: ' + device[2] + ', MAC: ' + device[3] + ', Name: ' + device[4] + '</p>');
+                });
+            }
+
+            if (devicesRemoved.length > 0) {
+                resultDiv.append('<h3>Удаленные устройства:</h3>');
+                devicesRemoved.forEach(function(device) {
+                    resultDiv.append('<p>IP: ' + device[2] + ', MAC: ' + device[3] + ', Name: ' + device[4] + '</p>');
+                });
+            }
+
+            if (linksAdded.length > 0) {
+                resultDiv.append('<h3>Добавленные связи:</h3>');
+                linksAdded.forEach(function(link) {
+                    resultDiv.append('<p>From IP: ' + link[1] + ', From Port: ' + link[2] + ' <--> To IP: ' + link[3] + ', To Port: ' + link[4] + '</p>');
+                });
+            }
+
+            if (linksRemoved.length > 0) {
+                resultDiv.append('<h3>Удаленные связи:</h3>');
+                linksRemoved.forEach(function(link) {
+                    resultDiv.append('<p>From IP: ' + link[1] + ', From Port: ' + link[2] + ' <--> To IP: ' + link[3] + ', To Port: ' + link[4] + '</p>');
+                });
+            }
+        }
+
+function loadGraph(file) {
+    fetch('/update_graph', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ file_name: file })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const elements = data;
+        const cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: elements,
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'content': 'data(label2)',
+                        'text-wrap': 'wrap',
+                        'text-valign': 'center',
+                        'color': 'black',
+                        'background-color': 'data(color)',
+                        'width': '60px',
+                        'height': '60px'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'label': 'data(label2)',
+                        'width': 2,
+                        'line-color': 'data(color)',
+                        'target-arrow-color': 'data(color)',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: { name: 'preset' },
+            zoomingEnabled: true,
+            userZoomingEnabled: true,
+            minZoom: 0.1,
+            maxZoom: 10,
+            wheelSensitivity: 0.1
+        });
+
+        cy.on('tap', 'edge', function(event) {
+            const edge = event.target;
+            const edgeInfo = getEdgeInfo(edge);
+            showTooltip_link(edge, edgeInfo);
+        });
+
+
+            cy.on('tap', 'node', function(event) {
+                const node = event.target;
+                const portsInfo = getPortsInfo(node); 
+                showInfoPanel(node, portsInfo); 
+            });
+
+        document.getElementById('closeBtn').addEventListener('click', hideInfoPanel);
+        document.getElementById('closeBtn2').addEventListener('click', hideTooltip);
+
+    });
+}
+
+function getPortsInfo(node) {
+    const connectedEdges = node.connectedEdges();
+    let portsInfo = '';
+    connectedEdges.forEach(edge => {
+        const source = edge.source().id();
+        const target = edge.target().id();
+        if (source === node.id()) {
+            portsInfo += `Port: ${edge.data('from_port')}\n`;
+        } else if (target === node.id()) {
+            portsInfo += `Port: ${edge.data('to_port')}\n`;
+        }
+    });
+    return portsInfo.trim();
+}
+
+function getEdgeInfo(edge) {
+    const source = edge.source().data('label');
+    const target = edge.target().data('label');
+    const label = edge.data('label');
+    return `${label}\nSource: ${source}\nTarget: ${target}`;
+}
+
+function showTooltip_link(edge, edgeInfo) {
+    const linkTooltip = document.getElementById('links_tooltip');
+    const infoContent2 = document.getElementById('infoContent2');
+    infoContent2.innerText = edgeInfo;
+    linkTooltip.classList.add('show');
+
+}
+
+function hideTooltip() {
+    const linkTooltip = document.getElementById('links_tooltip');
+    linkTooltip.classList.remove('show');
+}
+
+function showInfoPanel(node, portsInfo) {
+    const infoPanel = document.getElementById('infoPanel');
+    const infoContent = document.getElementById('infoContent');
+    infoContent.innerText = `Node: ${node.data('label')}\nPorts:\n${portsInfo}`;
+    infoPanel.classList.add('show');
+}
+
+function hideInfoPanel() {
+    const infoPanel = document.getElementById('infoPanel');
+    infoPanel.classList.remove('show');
+}
+
+
+
+
+
+var selected_time;
+
+function selectDate(selectElement, index) {
+    var selectedFile = selectElement.value;
+    loadGraph(selectedFile);
+    
+    var dateTime = selectedFile.match(/\((.*?)\)/)[1];
+    var datePart = dateTime.split(' ')[0]; // "2024-07-24"
+    var timePart = dateTime.split(' ')[1]; // "18:52:23"
+    
+    selected_time = dateTime;
+    
+    var dateInput = document.getElementById('del_by_old_date');
+    var timeInput = document.getElementById('del_by_old_time');
+
+    dateInput.value = datePart;
+    timeInput.value = timePart;
+
+    var delButton = document.getElementById('del-button-' + index);
+    delButton.setAttribute('onclick', "del_by_time('" + dateTime + "')");
+    delButton.setAttribute('title', dateTime);
+}
+
+function del_by_old() {
+    var dateInput = document.getElementById('del_by_old_date').value;
+    var timeInput = document.getElementById('del_by_old_time').value;
+    var dateTime = dateInput + ' ' + timeInput;
+    del_by_time(dateTime, true);
+}
+
+function del_by_time(dataa, old = false) {
+    console.log(dataa);
+    fetch('/del_by_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ data: dataa, old: old })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                showNotification('success', 'Данные успешно удалены для ' + dataa);
+            } else {
+                showNotification('nosuccess', 'Ошибка удаления данных для ' + dataa);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            showNotification('nosuccess', 'Ошибка удаления данных для ' + dataa);
+        });
+}
+
+
+
+function add() {
+    console.log('1')
+    const ip = document.getElementById('ip').value;
+    if (ip) {
+        showNotification('success', 'Идет обновление... ');
+        fetch('/add_file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ip: ip })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                showNotification('success', 'Обновление дошло!');
+                location.reload(); 
+            } else {
+                showNotification('nosuccess', 'Ошибка добавления файла: ');
+            }
+        });    
+    } else {
+        showNotification('unsuccess', 'Пусьто(');
+    }
+
+}
+
+
+
+function updateData(ip_date) {
+    if (isUpdating) {
+        showNotification('nosuccess', 'Обновление уже выполняется. Пожалуйста, подождите.');
+        return;
+    }
+    if (ip_date) {
+        let ip_address = ip_date.split(' ')[0];
+        isUpdating = true;
+        showNotification('success', 'Обновление запущено для ' + ip_address);
+
+        fetch('/update_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ file_name: ip_address })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                showNotification('success', 'Данные успешно обновлены для ' + ip_address);
+            } else {
+                showNotification('nosuccess', 'Ошибка обновления данных для ' + ip_address);
+            }
+        })
+        .finally(() => {
+            isUpdating = false;
+        });
+    } else {
+        showNotification('nosuccess', 'Файл не выбран');
+    }
+}
+
+function showNotification(type, message) {
+    var alertClass = type === 'success' ? '.alert-success' : '.alert-danger';
+    var alertMessage = '<div class="alert ' + alertClass.substring(1) + '" role="alert">' + message + '</div>';
+    var $alert = $(alertMessage);
+    $('.alert-container').append($alert);
+    
+    setTimeout(function() {
+        $alert.fadeOut(500, function() {
+            $alert.remove();
+        });
+    }, 3000);
+}
+
+    </script>
+</body>
+</html>
