@@ -34,7 +34,7 @@
 ### 8. Управление связями между свичами
 Программа отображает все активные связи между свичами, их направления, а также отмечает наличие двойных связей, помогая администраторам быстро анализировать структуру сети.
 ![Схема топологии сети](https://raw.githubusercontent.com/Jammeren2/snmp_checker/refs/heads/main/image.png)
-![Схема топологии сети](https://raw.githubusercontent.com/Jammeren2/snmp_checker/refs/heads/main/image.png1)
+![Схема топологии сети](https://raw.githubusercontent.com/Jammeren2/snmp_checker/refs/heads/main/image1.png)
 ## Зависимости
 Проект использует следующие библиотеки:
 - **Flask** — для создания веб-интерфейса управления.
